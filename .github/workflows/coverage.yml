@@ -29,7 +29,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_commit.id }}
 
       - name: Download Coverage Artifacts
-        uses: dawidd6/action-download-artifact@09f2f74827fd3a8607589e5ad7f9398816f540fe
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           workflow: ${{ github.event.workflow_run.workflow_id }}
