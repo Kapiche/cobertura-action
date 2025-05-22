@@ -6,8 +6,10 @@ on:
     types:
       - completed
 
-permissions:  # added using https://github.com/step-security/secure-workflows
-  contents: read
+permissions:
+  checks: write        # Required for creating check runs
+  pull-requests: write # Required for PR comments
+  actions: read        # Required for downloading artifacts
 
 jobs:
   coverage:
