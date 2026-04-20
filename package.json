@@ -44,6 +44,6 @@
     "eslint-plugin-prettier": "^5.5.5",
     "jest": "^30.3.0",
     "prettier": "^3.8.1",
-    "undici": "^7.24.0"
+    "undici": "^8.1.0"
   }
 }
