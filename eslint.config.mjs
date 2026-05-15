@@ -20,7 +20,7 @@ export default [{
             ...globals.node,
         },
 
-        ecmaVersion: 2018,
-        sourceType: "commonjs",
+        ecmaVersion: 2022,
+        sourceType: "module",
     },
 }];

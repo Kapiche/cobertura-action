@@ -1,8 +1,8 @@
-const {
+import {
   processCoverage,
   trimFolder,
   longestCommonPrefix,
-} = require("./cobertura");
+} from "./cobertura.js";
 
 test("multiple files", async () => {
   const reports = await processCoverage("./src/fixtures/*-branch.xml");

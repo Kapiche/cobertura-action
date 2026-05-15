@@ -1,8 +1,9 @@
-const fs = require("fs").promises;
-const xml2js = require("xml2js");
-const util = require("util");
-const glob = require("glob-promise");
-const parseString = util.promisify(xml2js.parseString);
+import { promises as fs } from "fs";
+import xml2js from "xml2js";
+import { promisify } from "util";
+import glob from "glob-promise";
+
+const parseString = promisify(xml2js.parseString);
 
 /**
  * generate the report for the given file
@@ -36,7 +37,7 @@ async function readCoverageFromFile(path, options) {
   };
 }
 
-function trimFolder(path, positionOfFirstDiff) {
+export function trimFolder(path, positionOfFirstDiff) {
   const lastFolder = path.lastIndexOf("/") + 1;
   if (positionOfFirstDiff >= lastFolder) {
     return path.substr(lastFolder);
@@ -53,7 +54,7 @@ function trimFolder(path, positionOfFirstDiff) {
  * @param options: {}
  * @returns {Promise<{total: number, folder: string, line: number, files: T[], branch: number}[]>}
  */
-async function processCoverage(path, options) {
+export async function processCoverage(path, options) {
   options = options || { skipCovered: false };
 
   const paths = glob.hasMagic(path) ? await glob(path) : [path];
@@ -175,7 +176,7 @@ function partitionLines(statements, lines) {
  * @param paths: [string]
  * @returns number
  */
-function longestCommonPrefix(paths) {
+export function longestCommonPrefix(paths) {
   let prefix = "";
   if (paths === null || paths.length === 0) return 0;
 
@@ -191,9 +192,3 @@ function longestCommonPrefix(paths) {
 
   return prefix.length;
 }
-
-module.exports = {
-  processCoverage,
-  trimFolder,
-  longestCommonPrefix,
-};

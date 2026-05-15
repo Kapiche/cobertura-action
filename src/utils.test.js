@@ -1,4 +1,4 @@
-const { escapeMarkdown } = require("./utils");
+import { escapeMarkdown } from "./utils.js";
 
 test("escapeMarkdown()", () => {
   const strings = [
