@@ -45,7 +45,11 @@ inputs:
     required: false
     default: false
   link_missing_lines_source_dir:
-    description: 'Source directory used for link_missing_lines.'
+    description: 'Source directory used for link_missing_lines. Falls back to source_dir if unset.'
+    required: false
+    default: ''
+  source_dir:
+    description: 'Repository-relative path to the directory the coverage report was generated in. Used to translate coverage filenames (which are relative to the test runner''s working directory) into repo-relative paths when matching against the PR diff (only_changed_files) and when building blob links.'
     required: false
     default: ''
   only_changed_files:

@@ -259,6 +259,69 @@ test("action only changes", async () => {
   await action();
 });
 
+test("action only changes with source_dir prefix (monorepo)", async () => {
+  const { action } = await import("./action.js");
+  process.env["INPUT_PATH"] = "./src/fixtures/test-branch.xml";
+  process.env["INPUT_SKIP_COVERED"] = "true";
+  process.env["INPUT_SHOW_BRANCH"] = "false";
+  process.env["INPUT_SHOW_LINE"] = "false";
+  process.env["INPUT_MINIMUM_COVERAGE"] = "100";
+  process.env["INPUT_SHOW_CLASS_NAMES"] = "false";
+  process.env["INPUT_SHOW_MISSING"] = "false";
+  process.env["INPUT_ONLY_CHANGED_FILES"] = "true";
+  process.env["INPUT_PULL_REQUEST_NUMBER"] = "";
+  process.env["INPUT_REPORT_NAME"] = "Frontend";
+  process.env["INPUT_SOURCE_DIR"] = "frontend";
+  const prNumber = 1;
+  apiMock
+    .intercept({
+      method: "GET",
+      path: `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    })
+    .reply(200, [], { headers: { "content-type": "application/json" } });
+  // PR diff returns paths with the monorepo prefix; coverage XML's
+  // search/LinearSearch.java is the same file once the prefix is stripped.
+  // README.md is outside source_dir and should be ignored.
+  apiMock
+    .intercept({
+      method: "GET",
+      path: `/repos/${owner}/${repo}/pulls/${prNumber}/files`,
+    })
+    .reply(
+      200,
+      [
+        { filename: "frontend/search/LinearSearch.java" },
+        { filename: "README.md" },
+      ],
+      { headers: { "content-type": "application/json" } },
+    );
+  // Assert on the comment body so we know the file actually appeared after
+  // prefix translation.
+  apiMock
+    .intercept({
+      method: "POST",
+      path: `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+      body: (raw) => {
+        const body = JSON.parse(raw).body;
+        return (
+          body.includes("search/LinearSearch.java") &&
+          !body.includes("BinarySearch.java") &&
+          !body.includes("README.md")
+        );
+      },
+    })
+    .reply(200);
+  apiMock
+    .intercept({ method: "POST", path: `/repos/${owner}/${repo}/check-runs` })
+    .reply(200);
+
+  await action({
+    pull_request: { number: prNumber, head: { sha: "deadbeef" } },
+  });
+  delete process.env["INPUT_REPORT_NAME"];
+  delete process.env["INPUT_SOURCE_DIR"];
+});
+
 test("action with report name", async () => {
   const { action } = await import("./action.js");
   process.env["INPUT_PATH"] = "./src/fixtures/test-branch.xml";

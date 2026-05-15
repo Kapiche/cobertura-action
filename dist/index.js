@@ -74014,6 +74014,23 @@ function getOptionalBooleanInput(name) {
   return getInput(name) ? getBooleanInput(name) : false;
 }
 
+// Strip leading and trailing slashes; treat empty string as "no prefix".
+function normalizeDir(value) {
+  return value ? value.replace(/\/$/, "").replace(/^\//, "") : "";
+}
+
+// PR diffs return repo-relative paths; coverage XML usually returns paths
+// relative to the test runner's working directory. Strip the source_dir
+// prefix from PR-diff filenames so the two coordinate systems line up.
+// Files outside source_dir are dropped — they have no coverage entries.
+function translateChangedFiles(files, sourceDir) {
+  if (!sourceDir) return files;
+  const prefix = `${sourceDir}/`;
+  return files
+    .filter((f) => f.startsWith(prefix))
+    .map((f) => f.slice(prefix.length));
+}
+
 // Hidden marker so we can locate this action's previous comment unambiguously
 // instead of relying on a substring match against the rendered body.
 function commentMarker(reportName) {
@@ -74047,15 +74064,27 @@ async function action(payload) {
     ? parseInt(showMissingMaxLength)
     : -1;
   const linkMissingLines = getOptionalBooleanInput("link_missing_lines");
+  const sourceDir = normalizeDir(
+    getInput("source_dir", { required: false }),
+  );
+  // link_missing_lines_source_dir keeps its independent meaning for backward
+  // compatibility; if it's unset, fall back to source_dir.
   const linkMissingLinesSourceDir =
-    getInput("link_missing_lines_source_dir", { required: false }) || null;
+    normalizeDir(
+      getInput("link_missing_lines_source_dir", { required: false }),
+    ) ||
+    sourceDir ||
+    null;
   const onlyChangedFiles = getBooleanInput("only_changed_files", {
     required: true,
   });
   const reportName = getInput("report_name", { required: false });
 
   const changedFiles = onlyChangedFiles
-    ? await listChangedFiles(pullRequestNumber)
+    ? translateChangedFiles(
+        await listChangedFiles(pullRequestNumber),
+        sourceDir,
+      )
     : null;
 
   const reports = await processCoverage(path, { skipCovered });
