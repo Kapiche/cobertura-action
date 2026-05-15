@@ -83,7 +83,28 @@ Defaults to `false`.
 ### `link_missing_lines_source_dir`
 
 Allows specifying a source directory for `link_missing_lines`, that will be inserted
-into the resulting URLs, in-between the commit hash and the file path.
+into the resulting URLs, in-between the commit hash and the file path. If unset,
+falls back to [`source_dir`](#source_dir).
+
+### `source_dir`
+
+Repository-relative path to the directory the coverage report was generated in.
+
+Coverage XML files usually list filenames relative to the test runner's working
+directory (e.g. `src/Button.tsx`), while the GitHub PR diff API and blob URLs
+expect repo-relative paths (e.g. `frontend/src/Button.tsx`). `source_dir` is
+the prefix that bridges the two:
+
+- For [`only_changed_files`](#only_changed_files), the prefix is stripped from
+  each PR-diff filename before it's matched against coverage entries. Files
+  outside `source_dir` are ignored.
+- For [`link_missing_lines`](#link_missing_lines), `source_dir` is used as the
+  prefix when building blob URLs (unless
+  [`link_missing_lines_source_dir`](#link_missing_lines_source_dir) is set
+  explicitly).
+
+Leave unset if your coverage XML already uses repo-relative paths. See the
+[monorepo example](#monorepo-setup) below.
 
 ### `only_changed_files`
 
@@ -116,6 +137,70 @@ jobs:
           path: src/test.xml
           minimum_coverage: 75
 ```
+
+## Monorepo setup
+
+In a monorepo where each package has its own coverage report, the coverage XML
+will list filenames relative to the test runner's working directory but the PR
+diff API returns them repo-relative. Without translation, `only_changed_files`
+filters everything out and `link_missing_lines` points at URLs that 404.
+
+Set [`source_dir`](#source_dir) to the path from the repo root to the directory
+the coverage report was generated in. One action invocation per package, each
+with its own `source_dir`, `report_name`, and `check_name`:
+
+```yaml
+jobs:
+  frontend-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Kapiche/cobertura-action@v19
+        with:
+          path: frontend/coverage/cobertura-coverage.xml
+          source_dir: frontend
+          minimum_coverage: 50
+          only_changed_files: true
+          show_missing: true
+          link_missing_lines: true
+          report_name: Frontend Coverage Report
+          check_name: frontend-coverage
+
+  backend-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Kapiche/cobertura-action@v19
+        with:
+          path: backend/coverage.xml
+          source_dir: backend
+          minimum_coverage: 80
+          only_changed_files: true
+          show_missing: true
+          link_missing_lines: true
+          report_name: Backend Coverage Report
+          check_name: backend-coverage
+```
+
+What happens:
+
+- `frontend/coverage/cobertura-coverage.xml` contains entries like
+  `src/Button.tsx`. The PR diff contains `frontend/src/Button.tsx`. With
+  `source_dir: frontend` the prefix is stripped from the PR diff entry, so
+  the two line up and the file appears in the report.
+- Files the PR changed outside `frontend/` (e.g. `backend/api.py`,
+  `README.md`) are dropped from the matching set — they have no coverage
+  data in this XML.
+- Missing-line links resolve to `…/blob/<sha>/frontend/src/Button.tsx`
+  rather than the broken `…/blob/<sha>/src/Button.tsx`.
+- Distinct `report_name` and `check_name` per package keep each report's
+  PR comment and commit check separate.
+
+If the diff and link prefixes need to differ (e.g. coverage filenames are
+class paths like `com/foo/Bar.java` but the actual source lives under
+`src/main/java/com/foo/Bar.java`), set
+[`link_missing_lines_source_dir`](#link_missing_lines_source_dir) for the link
+prefix and `source_dir` for the diff-match prefix independently.
 
 ## Development
 
