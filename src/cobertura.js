@@ -38,14 +38,17 @@ async function readCoverageFromFile(path, options) {
 }
 
 export function trimFolder(path, positionOfFirstDiff) {
-  const lastFolder = path.lastIndexOf("/") + 1;
-  if (positionOfFirstDiff >= lastFolder) {
-    return path.substr(lastFolder);
-  } else {
-    const startOffset = Math.min(positionOfFirstDiff - 1, lastFolder);
-    const length = path.length - startOffset - lastFolder - 2; // remove filename
-    return path.substr(startOffset, length);
+  const lastSlash = path.lastIndexOf("/");
+  const folderStart = lastSlash + 1;
+  if (positionOfFirstDiff >= folderStart) {
+    // Paths diverge inside the filename; use the filename itself as the label.
+    return path.substr(folderStart);
   }
+  // Paths diverge somewhere in the folder structure. Include the slash
+  // preceding the differing segment for readability, and stop before the
+  // final slash so the filename isn't part of the label.
+  const startOffset = Math.max(0, positionOfFirstDiff - 1);
+  return path.substring(startOffset, lastSlash);
 }
 
 /**

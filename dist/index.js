@@ -73773,8 +73773,17 @@ function getOctokit(token, options, ...additionalPlugins) {
 }
 //# sourceMappingURL=github.js.map
 ;// CONCATENATED MODULE: ./src/utils.js
+// Markdown characters that need escaping inside a table cell. Limited to
+// the set that (a) breaks the table itself, (b) enables link/HTML
+// injection, or (c) was already escaped by previous versions of this
+// function. `.`, `!`, `+`, `-` etc. are not included because they only have
+// markdown meaning at line-start, which can't happen inside a cell.
+const MARKDOWN_SPECIAL = /([\\`*_~#<>|[\]()])/g;
+
 function escapeMarkdown(string) {
-  return string.replace(/([*_`~#\\])/g, "\\$1");
+  // Newlines in a table cell break the whole row, so collapse them rather
+  // than escape them.
+  return string.replace(/\r?\n/g, " ").replace(MARKDOWN_SPECIAL, "\\$1");
 }
 
 // EXTERNAL MODULE: ./node_modules/xml2js/lib/xml2js.js
@@ -73824,14 +73833,17 @@ async function readCoverageFromFile(path, options) {
 }
 
 function trimFolder(path, positionOfFirstDiff) {
-  const lastFolder = path.lastIndexOf("/") + 1;
-  if (positionOfFirstDiff >= lastFolder) {
-    return path.substr(lastFolder);
-  } else {
-    const startOffset = Math.min(positionOfFirstDiff - 1, lastFolder);
-    const length = path.length - startOffset - lastFolder - 2; // remove filename
-    return path.substr(startOffset, length);
+  const lastSlash = path.lastIndexOf("/");
+  const folderStart = lastSlash + 1;
+  if (positionOfFirstDiff >= folderStart) {
+    // Paths diverge inside the filename; use the filename itself as the label.
+    return path.substr(folderStart);
   }
+  // Paths diverge somewhere in the folder structure. Include the slash
+  // preceding the differing segment for readability, and stop before the
+  // final slash so the filename isn't part of the label.
+  const startOffset = Math.max(0, positionOfFirstDiff - 1);
+  return path.substring(startOffset, lastSlash);
 }
 
 /**
@@ -74002,6 +74014,13 @@ function getOptionalBooleanInput(name) {
   return getInput(name) ? getBooleanInput(name) : false;
 }
 
+// Hidden marker so we can locate this action's previous comment unambiguously
+// instead of relying on a substring match against the rendered body.
+function commentMarker(reportName) {
+  const slug = (reportName || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `<!-- cobertura-action:${slug} -->`;
+}
+
 async function action(payload) {
   const { pullRequestNumber, commit } = await pullRequestInfo(payload);
   if (!commit) {
@@ -74078,8 +74097,11 @@ function formatFileUrl(sourceDir, fileName, commit) {
   // Strip leading and trailing slashes.
   sourceDir = sourceDir.replace(/\/$/, "").replace(/^\//, "");
   const path = (sourceDir ? `${sourceDir}/` : "") + fileName;
+  // Encode each path segment so filenames containing ?, #, &, spaces, etc.
+  // don't corrupt the URL (split on / so the slashes themselves survive).
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const githubUrl = process.env["GITHUB_SERVER_URL"] || "https://github.com";
-  return `${githubUrl}/${repo.owner}/${repo.repo}/blob/${commit}/${path}`;
+  return `${githubUrl}/${repo.owner}/${repo.repo}/blob/${commit}/${encodedPath}`;
 }
 
 function formatRangeText([start, end]) {
@@ -74231,24 +74253,26 @@ function markdownReport(reports, commit, options) {
 }
 
 async function addComment(pullRequestNumber, body, reportName) {
-  const comments = await getClient().rest.issues.listComments({
+  const client = getClient();
+  const marker = commentMarker(reportName);
+  const fullBody = `${marker}\n${body}`;
+  const comments = await client.paginate(client.rest.issues.listComments, {
     issue_number: pullRequestNumber,
     ...github_context.repo,
   });
-  const commentFilter = reportName ? reportName : credits;
-  const comment = comments.data.find((comment) =>
-    comment.body.includes(commentFilter),
+  const comment = comments.find(
+    (c) => typeof c.body === "string" && c.body.includes(marker),
   );
   if (comment != null) {
-    await getClient().rest.issues.updateComment({
+    await client.rest.issues.updateComment({
       comment_id: comment.id,
-      body: body,
+      body: fullBody,
       ...github_context.repo,
     });
   } else {
-    await getClient().rest.issues.createComment({
+    await client.rest.issues.createComment({
       issue_number: pullRequestNumber,
-      body: body,
+      body: fullBody,
       ...github_context.repo,
     });
   }
@@ -74271,11 +74295,12 @@ async function addCheck(body, reportName, sha, conclusion) {
 }
 
 async function listChangedFiles(pullRequestNumber) {
-  const files = await getClient().rest.pulls.listFiles({
+  const client = getClient();
+  const files = await client.paginate(client.rest.pulls.listFiles, {
     pull_number: pullRequestNumber,
     ...github_context.repo,
   });
-  return files.data.map((file) => file.filename);
+  return files.map((file) => file.filename);
 }
 
 async function pullRequestInfo(payload = {}) {
@@ -74295,11 +74320,12 @@ async function pullRequestInfo(payload = {}) {
   } else if (payload.workflow_run) {
     // Fetch all open PRs and match the commit hash.
     commit = payload.workflow_run.head_commit.id;
-    const { data } = await getClient().rest.pulls.list({
+    const client = getClient();
+    const openPulls = await client.paginate(client.rest.pulls.list, {
       ...github_context.repo,
       state: "open",
     });
-    pullRequestNumber = data
+    pullRequestNumber = openPulls
       .filter((d) => d.head.sha === commit)
       .reduce((n, d) => d.number, "");
   } else if (payload.pull_request) {

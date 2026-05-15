@@ -265,6 +265,12 @@ test("processCoverage(test-missing-lines.xml, {skipCovered: true})", async () =>
 test("trimFolder", () => {
   expect(trimFolder("/a/b/c/file.xml", 7)).toBe("file.xml");
   expect(trimFolder("/a/b/c/file.xml", 3)).toBe("/b/c");
+  // Regression: previously the formula assumed an 8-char filename, so
+  // anything else produced garbage like "/a/cove" or "much-longer-name.xml".
+  expect(trimFolder("src/a/coverage.xml", 4)).toBe("/a");
+  expect(trimFolder("src/b/coverage.xml", 4)).toBe("/b");
+  expect(trimFolder("packages/web/coverage.xml", 9)).toBe("/web");
+  expect(trimFolder("packages/api/coverage.xml", 9)).toBe("/api");
 });
 
 test("longestCommonPrefix", () => {
