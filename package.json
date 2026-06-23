@@ -14,7 +14,7 @@
     "package:watch": "ncc build index.js --watch"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "jest": {
     "coverageReporters": [
