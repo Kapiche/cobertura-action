@@ -1,5 +1,6 @@
-import { MockAgent, setGlobalDispatcher } from "undici";
+import { MockAgent, setGlobalDispatcher, fetch as undiciFetch } from "undici";
 import { jest } from "@jest/globals";
+import { _setRequestFetchForTests } from "./action.js";
 
 let mockAgent;
 let apiMock;
@@ -45,6 +46,10 @@ beforeEach(() => {
   mockAgent = new MockAgent({ connections: 1 });
   mockAgent.disableNetConnect();
   setGlobalDispatcher(mockAgent);
+  // Make the action's Octokit client route through undici's fetch so it uses
+  // the MockAgent dispatcher installed above. @actions/github's default fetch
+  // otherwise passes its own dispatcher and bypasses the mock entirely.
+  _setRequestFetchForTests(undiciFetch);
   apiMock = mockAgent.get("https://api.github.com");
   process.env["INPUT_REPO_TOKEN"] = "hunter2";
   process.env["GITHUB_REPOSITORY"] = `${owner}/${repo}`;
@@ -53,6 +58,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  _setRequestFetchForTests(undefined);
   mockAgent.assertNoPendingInterceptors();
   mockAgent.close();
 });

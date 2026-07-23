@@ -4,10 +4,22 @@ import { escapeMarkdown } from "./utils.js";
 import { processCoverage } from "./cobertura.js";
 
 let _client;
+// Test seam: @actions/github's default fetch passes an explicit undici
+// dispatcher, which bypasses the global MockAgent that tests install via
+// setGlobalDispatcher (under undici v8 the global dispatcher also lives in a
+// different module realm than @actions/github, so it is never seen). Tests
+// inject undici's fetch here so requests honour the mock dispatcher. Left
+// undefined in production, where @actions/github's proxy-aware fetch is used.
+let _requestFetch;
+export function _setRequestFetchForTests(fetch) {
+  _requestFetch = fetch;
+  _client = undefined;
+}
 function getClient() {
   if (!_client) {
     _client = github.getOctokit(
       core.getInput("repo_token", { required: true }),
+      _requestFetch ? { request: { fetch: _requestFetch } } : undefined,
     );
   }
   return _client;
