@@ -1,8 +1,9 @@
-import { MockAgent, setGlobalDispatcher } from "undici";
+import { MockAgent, setGlobalDispatcher, fetch as undiciFetch } from "undici";
 import { jest } from "@jest/globals";
 
 let mockAgent;
 let apiMock;
+let originalFetch;
 const owner = "someowner";
 const repo = "somerepo";
 const dummyReport = {
@@ -45,6 +46,12 @@ beforeEach(() => {
   mockAgent = new MockAgent({ connections: 1 });
   mockAgent.disableNetConnect();
   setGlobalDispatcher(mockAgent);
+  // undici v8 moved its global dispatcher to a new global symbol that Node's
+  // built-in fetch does not read, so setGlobalDispatcher no longer intercepts
+  // globalThis.fetch. Route requests through undici's own fetch, which honours
+  // the dispatcher set above. Octokit reads globalThis.fetch at call time.
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = undiciFetch;
   apiMock = mockAgent.get("https://api.github.com");
   process.env["INPUT_REPO_TOKEN"] = "hunter2";
   process.env["GITHUB_REPOSITORY"] = `${owner}/${repo}`;
@@ -53,6 +60,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  globalThis.fetch = originalFetch;
   mockAgent.assertNoPendingInterceptors();
   mockAgent.close();
 });
